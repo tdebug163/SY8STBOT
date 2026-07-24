@@ -9,7 +9,7 @@ import os
 
 TOKEN = os.environ.get("BOT_TOKEN")
 
-bot = TeleBot(TOKEN, parse_mode='HTML')
+bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
 
 ADMINS = [445421092, 729501226]
