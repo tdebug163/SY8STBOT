@@ -1,3 +1,6 @@
 flask
 requests
-pyTelegramBotAPI
+aiohttp
+aiosqlite
+pyrogram
+TgCrypto
