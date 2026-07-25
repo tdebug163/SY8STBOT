@@ -1,13 +1,14 @@
-import asyncio
 import os
+import asyncio
 import random
 import datetime
 import aiohttp
 import aiosqlite
-from pyrogram import Client, filters
-from pyrogram.types import Message, CallbackQuery
+from pyrogram import Client, filters, idle
+from pyrogram.types import Message, CallbackQuery, BotCommand
+from aiohttp import web
 
-# --- الإعدادات الأساسية ---
+# --- الإعدادات الأساسية تسحب من ريندر ---
 TOKEN = os.environ.get("BOT_TOKEN")
 API_ID = 28797361 # يفضل وضع API_ID الخاص بك من my.telegram.org (استخدمت رقم افتراضي يعمل للتيست)
 API_HASH = "771041b32e83ab232e066b7adeee700b" # افتراضي
@@ -27,7 +28,7 @@ LINK_USER_HIDDEN = '<a href="http://t.me/Oneillusion">( المستخدم )</a>'
 
 async def init_db():
     async with aiosqlite.connect('sarahni.db') as db:
-        await db.execute('PRAGMA journal_mode=WAL;') # تسريع قواعد البيانات بشكل هائل
+        await db.execute('PRAGMA journal_mode=WAL;')
         await db.execute('PRAGMA synchronous=NORMAL;')
         await db.execute('CREATE TABLE IF NOT EXISTS states (user_id INTEGER PRIMARY KEY, target_id INTEGER)')
         await db.execute('CREATE TABLE IF NOT EXISTS messages (receiver_id INTEGER, message_id INTEGER, sender_id INTEGER, PRIMARY KEY(receiver_id, message_id))')
@@ -145,7 +146,6 @@ HELP_TEXT = f"اهلاً بك: \n\n⁉️ إذا ظهرت لك رسالة :\n{{�
 ABOUT_TEXT = f"📩 بوت صارحني\n▫️صارحني لتلقي النقد البناء بسرية تامة لتنمية الذات مع الحفاظ على سرية هوية المرسل\n\n▪️ الفائدة .\n▫️عزز نقاط القوة لديك\n▫️عالج نقاط ضعفك\n▫️مكّن أصحابك من مصارحتك\n\n📱 يتيح لك بوت صارحني مشاركة الرابط والرد على الرسائل بسهولة\n\n🔘 هل أنت مستعد لمعرفة ملاحظات الناس عنك بدون أن تعرفهم ؟\n\n💡 إصدار البوت : V1.4\n🐘 إصدار ملف البوت : Php8.1.13\n👨🏻‍🔧 مبرمج البوت : @RSaied_Bot\n\n{LINK_NEW_CH}"
 
 def get_main_markup():
-    # زر التبرع الأخضر الكبير في الأعلى، زر إنشاء الرابط الأزرق في الأسفل
     return {
         "inline_keyboard": [
             [{"text": "🎁 تبرع - Donate", "callback_data": "donate_btn", "style": "success"}],
@@ -167,8 +167,6 @@ def get_back_markup(to="main", extra=None):
         keys.append([{"text": "🔐 سياسة الخصوصية", "callback_data": "privacy"}])
     elif extra == "terms":
         keys.append([{"text": "📝 شروط الاستخدام", "callback_data": "terms"}])
-    
-    # زر إنشاء رابط يظهر في كل القوائم كزر أساسي بجانب الرجوع
     keys.append([{"text": "🌐 إنشاء رابط خاص", "callback_data": "create_link", "style": "primary"}])
     keys.append([{"text": "🔙 رجوع ...", "callback_data": to}])
     return {"inline_keyboard": keys}
@@ -182,6 +180,22 @@ app = Client(
     bot_token=TOKEN
 )
 
+# ================== تثبيت قائمة الأوامر الزرقاء ==================
+async def setup_commands(client: Client):
+    await client.set_bot_commands([
+        BotCommand("start", "رسالة البدء"),
+        BotCommand("help", "أوامر البوت"),
+        BotCommand("termsofuse", "شروط الإستخدام"),
+        BotCommand("privacy", "سياسة الخصوصية"),
+        BotCommand("exit", "للخروج من رابط الصراحة الذي دخلت إليه"),
+        BotCommand("unbanall", "رفع حظر الجميع - لرفع الحظر عن المحظورين"),
+        BotCommand("unban", "رفع الحظر - مع الرد على الرسالة"),
+        BotCommand("link", "الرابط - لإنشاء رابط صراحة خاص بك"),
+        BotCommand("report", "ابلاغ - للابلاغ عن من يخالف شروط الاستخدام"),
+        BotCommand("ban", "حظر - مع الرد على الرسالة")
+    ])
+    print("Bot Commands Menu setup completed.")
+
 # ================== الأوامر الرئيسية ==================
 
 @app.on_message(filters.command("start") & filters.private)
@@ -189,7 +203,7 @@ async def start_handler(client: Client, message: Message):
     if len(message.command) > 1:
         payload = message.command[1]
         try:
-            target_id = int(payload, 16) # فك التشفير
+            target_id = int(payload, 16)
             if target_id == message.from_user.id:
                 await raw_send_message(message.chat.id, f"لا يمكنك مصارحة نفسك!\n\n{LINK_NEW_CH}", reply_to_message_id=message.id)
                 return
@@ -201,7 +215,6 @@ async def start_handler(client: Client, message: Message):
         except:
             pass
 
-    # الواجهة الرئيسية (إرسال رسالة جديدة) بالرد على المستخدم
     await raw_send_message(message.chat.id, START_TEXT, reply_markup=get_main_markup(), reply_to_message_id=message.id)
 
 @app.on_message(filters.command(['help', 'privacy', 'termsofuse', 'link', 'exit']) & filters.private)
@@ -227,7 +240,6 @@ async def send_user_link(chat_id, user_id, reply_to_message_id=None, is_edit=Fal
     link = f"http://t.me/{BOT_USERNAME}?start={hex_id}"
     text = f"▪️ الرابط الخاص بك .\n\n▫️ {link}\n\n▫️ يمكنك نشر الرابط في قروبات التيليجرام او بين أصدقائك او مواقع التواصل الإجتماعي.\n\n🖇 شرح استعمال بوت صارحني داخل القنوات\n\n▪️حانت لحظة الصراحة .\n\n{LINK_NEW_CH}"
     
-    # الزر الأزرق لنسخ الرابط مع زر الرجوع
     markup = {
         "inline_keyboard": [
             [{"text": "نسخ الرابط", "url": f"https://t.me/share/url?url={link}", "style": "primary"}],
@@ -239,7 +251,7 @@ async def send_user_link(chat_id, user_id, reply_to_message_id=None, is_edit=Fal
     else:
         await raw_send_message(chat_id, text, reply_markup=markup, reply_to_message_id=reply_to_message_id)
 
-# ================== الكول باك (تعديل الرسالة بدلاً من حذفها) ==================
+# ================== الكول باك ==================
 
 @app.on_callback_query()
 async def callback_handler(client: Client, call: CallbackQuery):
@@ -263,7 +275,6 @@ async def callback_handler(client: Client, call: CallbackQuery):
         elif data == "main":
             await raw_edit_message(chat_id, msg_id, START_TEXT, reply_markup=get_main_markup())
         elif data == "create_link":
-            # هنا نقوم بتعديل الرسالة لعرض الرابط بدلاً من الحذف
             await send_user_link(chat_id, call.from_user.id, is_edit=True, message_id=msg_id)
         
         elif data == "fake_reply":
@@ -295,7 +306,6 @@ async def text_messages(client: Client, message: Message):
     user_id = message.from_user.id
     text = message.text
 
-    # حالة 1: المستخدم يرد على رسالة صراحة وصلته
     if message.reply_to_message:
         replied_msg_id = message.reply_to_message.id
         sender_id = await get_msg_sender(user_id, replied_msg_id)
@@ -315,15 +325,12 @@ async def text_messages(client: Client, message: Message):
                 await raw_send_message(message.chat.id, rep_text, reply_to_message_id=message.id)
                 return
             
-            # الرد العادي
             try:
                 markup = {"inline_keyboard": [[{"text": "⁣💌 وصلتك رسالة جديدة", "callback_data": "alert_new_msg"}]]}
                 resp = await raw_send_message(sender_id, text, reply_markup=markup)
                 
                 if resp.get("ok"):
                     sent_msg_id = resp["result"]["message_id"]
-                    
-                    # زر الاسترداد باللون الأحمر (danger)
                     undo_markup = {
                         "inline_keyboard": [
                             [{"text": "🗑 استرداد الرد", "callback_data": f"undo_{message.id}", "style": "danger"}]
@@ -336,7 +343,6 @@ async def text_messages(client: Client, message: Message):
                 await raw_send_message(message.chat.id, f"تعذر إرسال الرد، ربما قام الشخص بحظر البوت.\n\n{LINK_NEW_CH}", reply_to_message_id=message.id)
             return
 
-    # حالة 2: المستخدم داخل وضع إرسال صراحة لشخص
     target_id = await get_state(user_id)
     if target_id:
         if await is_banned(target_id, user_id):
@@ -345,16 +351,17 @@ async def text_messages(client: Client, message: Message):
             
         now = datetime.datetime.now().strftime("%Y/%m/%d - %I:%M:%S %p")
         
-        # إذا كان المستلم أدمن (معرف أزرق واسم مستخدم)
+        # استخراج بيانات المرسل بصيغة ماركداون (رابط)
+        sender_name_clean = message.from_user.first_name.replace("<", "&lt;").replace(">", "&gt;")
+        sender_username_display = f" - @{message.from_user.username}" if message.from_user.username else ""
+        sender_markdown = f'<a href="tg://user?id={user_id}">{sender_name_clean}</a>{sender_username_display}'
+
         if target_id in ADMINS:
-            username_display = f" - @{message.from_user.username}" if message.from_user.username else ""
-            admin_msg = f'المرسل: <a href="tg://user?id={user_id}">{message.from_user.first_name}</a>{username_display}\n---\n{text}\n---'
-            
+            admin_msg = f'المرسل: {sender_markdown}\n---\n{text}\n---'
             resp = await raw_send_message(target_id, admin_msg)
             if resp.get("ok"):
                 await save_msg(target_id, resp["result"]["message_id"], user_id)
         else:
-            # مستخدم عادي
             user_msg = f"⁣💌 وصلتك رسالة جديدة\n⏱ وقت الرسالة: {now}\n----\n{text}\n----\n\n{LINK_DONATE}"
             fake_reply_markup = {"inline_keyboard": [[{"text": "💡يمكنك الرد بعمل رد على هذه الرسالة", "callback_data": "fake_reply"}]]}
             
@@ -362,16 +369,28 @@ async def text_messages(client: Client, message: Message):
             if resp.get("ok"):
                 await save_msg(target_id, resp["result"]["message_id"], user_id)
                 
-                # توجيه للقناة
-                username_display = f" - @{message.from_user.username}" if message.from_user.username else ""
-                log_text = f'رساله جديده ✉️\nالمرسل: <a href="tg://user?id={user_id}">{message.from_user.first_name}</a>{username_display}\nالمستلم: <a href="tg://user?id={target_id}">صاحب الرابط</a> \nمحتوى الرساله : {text}'
+                # إعداد رسالة القناة بالسبيسات (المسافات) والماركداون الصحيح للمرسل والمستلم
+                try:
+                    target_user_info = await client.get_users(target_id)
+                    target_name_clean = (target_user_info.first_name or "بدون اسم").replace("<", "&lt;").replace(">", "&gt;")
+                    target_username_display = f" - @{target_user_info.username}" if target_user_info.username else ""
+                    target_markdown = f'<a href="tg://user?id={target_id}">{target_name_clean}</a>{target_username_display}'
+                except:
+                    # في حال فشل جلب معلومات المستلم لسبب ما
+                    target_markdown = f'<a href="tg://user?id={target_id}">صاحب الرابط (غير معروف)</a>'
+
+                log_text = (
+                    f"رساله جديده ✉️\n\n"
+                    f"المرسل: {sender_markdown}\n\n"
+                    f"المستلم: {target_markdown}\n\n"
+                    f"محتوى الرساله : {text}"
+                )
                 await raw_send_message(LOG_CHANNEL, log_text)
 
         success_send = f"✅ تم إرسال رسالتك بنجاح .\n\n{LINK_ILLUSION}\n\n{LINK_DONATE}"
         await raw_send_message(user_id, success_send, reply_to_message_id=message.id)
         return
 
-    # حالة 3: رسالة غير مفهومة
     err_text = f"▪ رسالة غير مفهومة ، أرسل /help\n\n{LINK_NEW_CH}\n\n{LINK_DONATE} ."
     await raw_send_message(user_id, err_text, reply_to_message_id=message.id)
 
@@ -380,12 +399,44 @@ async def unban_all_cmd(client: Client, message: Message):
     await unban_all(message.from_user.id)
     await raw_send_message(message.chat.id, f"✅ تم رفع الحظر عن جميع المحظورين بنجاح.\n\n{LINK_NEW_CH}", reply_to_message_id=message.id)
 
-# ================== التشغيل الأساسي ==================
+# ================== التشغيل الأساسي وسيرفر الويب ==================
+
+async def handle(request):
+    return web.Response(text="Bot is running smoothly on Render!")
+
+async def web_server():
+    app_web = web.Application()
+    app_web.router.add_get('/', handle)
+    runner = web.AppRunner(app_web)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"Web server started on port {port}")
+
+async def main():
+    print("Initializing Database...")
+    await init_db()
+    
+    print("Starting Web Server for Render...")
+    await web_server()
+    
+    print("Starting Pyrogram Bot...")
+    await app.start()
+    
+    print("Setting up Bot Commands Menu (Blue Button)...")
+    await setup_commands(app)
+    
+    print("Bot is running fast using Pyrogram & aiosqlite...")
+    await idle()
+    
+    await app.stop()
 
 if __name__ == "__main__":
-    print("Bot is running fast using Pyrogram & aiosqlite...")
-    # إنشاء قاعدة البيانات في البداية 
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(init_db())
-    # تشغيل البوت
-    app.run()
+    loop.run_until_complete(main())
