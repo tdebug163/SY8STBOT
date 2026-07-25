@@ -11,7 +11,8 @@ from aiohttp import web
 # --- الإعدادات الأساسية تسحب من ريندر ---
 TOKEN = os.environ.get("BOT_TOKEN")
 API_ID = 28797361 # يفضل وضع API_ID الخاص بك من my.telegram.org (استخدمت رقم افتراضي يعمل للتيست)
-API_HASH = "771041b32e83ab232e066b7adeee700b" # افتراضي
+API_HASH = "771041b32e83ab232e066b7adeee700b" # افتراضي 
+
 
 ADMINS = [445421092, 729501226]
 LOG_CHANNEL = "-1004418071359"
@@ -182,19 +183,20 @@ app = Client(
 
 # ================== تثبيت قائمة الأوامر الزرقاء ==================
 async def setup_commands(client: Client):
+    # تم ترتيب الأوامر لتكون مطابقة للصورة حرفياً مع جميع الإيموجيات المطلوبة
     await client.set_bot_commands([
-        BotCommand("start", "رسالة البدء"),
-        BotCommand("help", "أوامر البوت"),
-        BotCommand("termsofuse", "شروط الإستخدام"),
-        BotCommand("privacy", "سياسة الخصوصية"),
-        BotCommand("exit", "للخروج من رابط الصراحة الذي دخلت إليه"),
-        BotCommand("unbanall", "رفع حظر الجميع - لرفع الحظر عن المحظورين"),
-        BotCommand("unban", "رفع الحظر - مع الرد على الرسالة"),
-        BotCommand("link", "الرابط - لإنشاء رابط صراحة خاص بك"),
-        BotCommand("report", "ابلاغ - للابلاغ عن من يخالف شروط الاستخدام"),
-        BotCommand("ban", "حظر - مع الرد على الرسالة")
+        BotCommand("ban", "◾ حظر - مع الرد على الرسالة"),
+        BotCommand("report", "⚠️ ابلاغ - للابلاغ عن من يخالف شروط الاستخدام"),
+        BotCommand("link", "🖇 الرابط - لإنشاء رابط صراحة خاص بك"),
+        BotCommand("unban", "▫️ رفع الحظر - مع الرد على الرسالة"),
+        BotCommand("unbanall", "🔘 رفع حظر الجميع - لرفع الحظر عن المحظورين"),
+        BotCommand("exit", "🚸 للخروج من رابط الصراحة الذي دخلت إليه"),
+        BotCommand("privacy", "🔐 سياسة الخصوصية"),
+        BotCommand("termsofuse", "📝 شروط الإستخدام"),
+        BotCommand("help", "⚙️ أوامر البوت"),
+        BotCommand("start", "🔘 رسالة البدء")
     ])
-    print("Bot Commands Menu setup completed.")
+    print("Bot Commands Menu setup completed successfully.")
 
 # ================== الأوامر الرئيسية ==================
 
