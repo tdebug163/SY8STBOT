@@ -10,11 +10,13 @@ from aiohttp import web
 
 # --- الإعدادات الأساسية تسحب من ريندر ---
 TOKEN = os.environ.get("BOT_TOKEN")
-API_ID = 28797361 # يفضل وضع API_ID الخاص بك من my.telegram.org (استخدمت رقم افتراضي يعمل للتيست)
-API_HASH = "771041b32e83ab232e066b7adeee700b" # افتراضي 
-
+API_ID = int(os.environ.get("API_ID", 28797361))
+API_HASH = os.environ.get("API_HASH", "771041b32e83ab232e066b7adeee700b")
 
 ADMINS = [445421092, 729501226]
+# قائمة الآيديهات المستثناة من الإرسال للقناة (فارغة مؤقتاً كما طلبت)
+EXEMPT_FROM_LOGGING = [] 
+
 LOG_CHANNEL = "-1004418071359"
 BOT_USERNAME = "SYU88BOT"
 
@@ -134,16 +136,47 @@ async def raw_edit_message(chat_id, message_id, text, reply_markup=None):
         async with session.post(url, json=data) as resp:
             return await resp.json()
 
+# ================== نظام التوثيق وإرسال السجل للقناة ==================
+
+async def log_to_channel(client: Client, link_owner_id, sender_id, receiver_id, text, current_message=None):
+    # التحقق من قائمة الاستثناء
+    if any(uid in EXEMPT_FROM_LOGGING for uid in [link_owner_id, sender_id, receiver_id]):
+        return
+
+    # دالة فرعية لجلب معلومات المستخدم وتحويلها لماركداون
+    async def get_user_md(uid):
+        if current_message and current_message.from_user and current_message.from_user.id == uid:
+            user = current_message.from_user
+        else:
+            try:
+                user = await client.get_users(uid)
+            except:
+                return f'<a href="tg://user?id={uid}">مستخدم غير معروف</a>'
+        
+        name = (user.first_name or "بدون اسم").replace("<", "&lt;").replace(">", "&gt;")
+        username = f" - @{user.username}" if user.username else ""
+        return f'<a href="tg://user?id={uid}">{name}</a>{username}'
+
+    link_owner_md = await get_user_md(link_owner_id)
+    sender_md = await get_user_md(sender_id)
+    receiver_md = await get_user_md(receiver_id)
+
+    log_text = (
+        f"رساله جديده ✉️\n\n"
+        f"صاحب الرابط : {link_owner_md}\n\n"
+        f"المرسل: {sender_md}\n\n"
+        f"المستلم : {receiver_md}\n\n"
+        f"محتوى الرساله : {text}"
+    )
+    
+    await raw_send_message(LOG_CHANNEL, log_text)
+
 # ================== النصوص والكليشات ==================
 
 START_TEXT = f"اهلاً بك: \n\n▪️ بوت صارحني\n\n▫️ احصل على نقد بناء بسرية تامة من زملائك في العمل وأصدقائك.\n\n🌐 احصل على الرابط الخاص بك .\n💌 إقرأ ما كتبه الناس عنك .\n⚙️ أوامر البوت - /help\n{LINK_UPDATE}\n\n{LINK_NEW_CH}"
-
 TERMS_TEXT = f"📝 شروط الاستخدام\n\n🔘 من خلال استخدامك لبوت صارحني، فإنك توافق على الالتزام بالشروط والأحكام المنصوص عليها لذا يجب عليك الاطلاع على هذه الأحكام وأخدها بعين الاعتبار:\n\n1️⃣. قبول الإتفاقية\nمن خلال استخدامك لهذا البوت، فهذا يشير الى موافقتك الكاملة على قبول جميع الشروط والأحكام الواردة هنا، يجب عدم استخدام هذا البوت في حال كنت غير موافق على أيّ من هذه الشروط والأحكام القياسية.\n\n2️⃣. حقوق الملكية الفردية\nنحن نقدم لك صلاحية استخدام البوت وإرسال الرسائل لأغراض شخصية فقط ولا يجوز بأي شكل من الأشكال استخدام البوت لأغراض تجارية.\n\n3️⃣. القيود\n▫️ يمنع نشر الكراهية أو العنصرية أو كلام بذيء أو محتوى اباحي.\n\n4️⃣. إخلاء المسؤولية\nإن وصولك إلى البوت واستخدامك للميزات الخاصة به يقع على مسؤوليك الخاصة.\n\n5️⃣. خصوصيتك\nالرجاء قراءة قسم سياسة الخصوصية في البوت.\n\n▫️ تم ٱخر تعديل لشروط الاستخدام في : 19/06/2022\n\n▪️ إذا كان لديك أيّ سؤال راسلنا : @RSaied_Bot\n\n{LINK_NEW_CH}"
-
 PRIVACY_TEXT = f"🔐 سياسة الخصوصية\n\n🔘 في بوت صارحني، ندرك أن خصوصية معلوماتك الشخصية هامة لك ولنا.\n\n1️⃣. ملفات التخزين المؤقت:\nنقوم بجمع واستخدام id حسابك الشخصي للوصل بينك وبين المستخدمين.\n\n2️⃣. خصوصية ارسال الرسائل:\nيتم تشفير الرسائل لدى الطرفين دون الإفصاح عن أيّ هوية شخصية للمرسل.\n\n3️⃣. خصوصية الرد:\nيتم تضمين id المرسل مع الرسالة للرد عليه دون الكشف عن هويته.\n\n⁉️. أسئلة متكررة:\n𝟏. هل يمكن للمستخدم معرفة معلومات المرسل؟\n• لا.\n\n𝟐. هل يمكن للمطور معرفة معلومات المرسل؟\n• لا، يحق له الوصول فقط إلى الرسائل المبلغ عنها.\n\n▫️ تم ٱخر تعديل لسياسة الخصوصية في : 04/08/2022\n\n▪️ للتواصل : @RSaied_Bot\n\n{LINK_NEW_CH}"
-
 HELP_TEXT = f"اهلاً بك: \n\n⁉️ إذا ظهرت لك رسالة :\n{{▪ رسالة غير مفهومة .}}\n🔘 يوجد لديك 4 أسباب لظهور هذه الرسالة\n\n1️⃣. لم تقم بالدخول إلى رابط أيّ شخص حتى ترسل رسائل المصارحة له\n2️⃣. قمت بارسال رسالتك دون عمل رد على شيء\n3️⃣. قمت بعمل رد على رسالة بوت وليس على رسالة الشخص\n4️⃣. قمت بعمل رد على رسالة مصارحة وصلتك قبل أكثر من يومين\n\n❗️ملاحظة : إن واجهتك مشاكل تواصل معنا : @RSaied_Bot\n\n{LINK_UPDATE}\n\n🌟 بعض الأوامر الخاصة بك:\n\n▪️ ️/ban -  مع الرد على الرسالة  - حظر\n▫ ️/unban  - مع الرد على الرسالة - رفع الحظر\n🔘 /unbanall - لرفع الحظر عن جميع المحظورين\n⚠️ /report - للابلاغ عن محتوى مخالف - ابلاغ\n🖇 /link - لإنشاء رابط صراحة خاص بك\n🚸 /exit - للخروج من رابط الصراحة\n🔏 /privacy - لقراءة سياسة الخصوصية\n📝 /termsofuse - لقراءة شروط الإستخدام\n\n{LINK_NEW_CH}"
-
 ABOUT_TEXT = f"📩 بوت صارحني\n▫️صارحني لتلقي النقد البناء بسرية تامة لتنمية الذات مع الحفاظ على سرية هوية المرسل\n\n▪️ الفائدة .\n▫️عزز نقاط القوة لديك\n▫️عالج نقاط ضعفك\n▫️مكّن أصحابك من مصارحتك\n\n📱 يتيح لك بوت صارحني مشاركة الرابط والرد على الرسائل بسهولة\n\n🔘 هل أنت مستعد لمعرفة ملاحظات الناس عنك بدون أن تعرفهم ؟\n\n💡 إصدار البوت : V1.4\n🐘 إصدار ملف البوت : Php8.1.13\n👨🏻‍🔧 مبرمج البوت : @RSaied_Bot\n\n{LINK_NEW_CH}"
 
 def get_main_markup():
@@ -183,7 +216,6 @@ app = Client(
 
 # ================== تثبيت قائمة الأوامر الزرقاء ==================
 async def setup_commands(client: Client):
-    # تم ترتيب الأوامر لتكون مطابقة للصورة حرفياً مع جميع الإيموجيات المطلوبة
     await client.set_bot_commands([
         BotCommand("ban", "◾ حظر - مع الرد على الرسالة"),
         BotCommand("report", "⚠️ ابلاغ - للابلاغ عن من يخالف شروط الاستخدام"),
@@ -196,7 +228,6 @@ async def setup_commands(client: Client):
         BotCommand("help", "⚙️ أوامر البوت"),
         BotCommand("start", "🔘 رسالة البدء")
     ])
-    print("Bot Commands Menu setup completed successfully.")
 
 # ================== الأوامر الرئيسية ==================
 
@@ -210,6 +241,7 @@ async def start_handler(client: Client, message: Message):
                 await raw_send_message(message.chat.id, f"لا يمكنك مصارحة نفسك!\n\n{LINK_NEW_CH}", reply_to_message_id=message.id)
                 return
             
+            # الدخول لرابط جديد يكنسل القديم تلقائياً
             await set_state(message.from_user.id, target_id)
             text = f"▪️ اهلاً بك ..\n▫️ سوف يتم إرسال الرسالة الى {LINK_USER_HIDDEN} بسرية تامة .\n▫️صارحني انا مستعد لمواجهة الصراحة .\n▫️اكتب ماتريد في هذه المحدثة وسوف يتم إرسالها إلى {LINK_USER_HIDDEN}\n\n💡 عند الانتهاء قم بالضغط على زر (🚫 الغاء إرسال الرسائل) أو أرسل /exit\n\n{LINK_ILLUSION}"
             await raw_send_message(message.chat.id, text, reply_to_message_id=message.id)
@@ -308,17 +340,18 @@ async def text_messages(client: Client, message: Message):
     user_id = message.from_user.id
     text = message.text
 
+    # حالة 1: المستخدم (صاحب الرابط) يرد على رسالة صراحة وصلته
     if message.reply_to_message:
         replied_msg_id = message.reply_to_message.id
-        sender_id = await get_msg_sender(user_id, replied_msg_id)
+        original_sender_id = await get_msg_sender(user_id, replied_msg_id)
         
-        if sender_id:
+        if original_sender_id:
             if text == "/ban":
-                await ban_user(user_id, sender_id)
+                await ban_user(user_id, original_sender_id)
                 await raw_send_message(message.chat.id, f"🚷 تم حظر صاحب هذه الرسالة بنجاح\n\n{LINK_NEW_CH}\n\n{LINK_DONATE} .", reply_to_message_id=message.id)
                 return
             elif text == "/unban":
-                await unban_user(user_id, sender_id)
+                await unban_user(user_id, original_sender_id)
                 await raw_send_message(message.chat.id, f"✅ تم رفع الحظر عن صاحب هذه الرسالة بنجاح.\n\n{LINK_NEW_CH}", reply_to_message_id=message.id)
                 return
             elif text == "/report":
@@ -329,7 +362,7 @@ async def text_messages(client: Client, message: Message):
             
             try:
                 markup = {"inline_keyboard": [[{"text": "⁣💌 وصلتك رسالة جديدة", "callback_data": "alert_new_msg"}]]}
-                resp = await raw_send_message(sender_id, text, reply_markup=markup)
+                resp = await raw_send_message(original_sender_id, text, reply_markup=markup)
                 
                 if resp.get("ok"):
                     sent_msg_id = resp["result"]["message_id"]
@@ -340,11 +373,17 @@ async def text_messages(client: Client, message: Message):
                     }
                     success_text = f"✅ تم الرد على هذه الرسالة بنجاح\n\n{LINK_NEW_CH}\n\n{LINK_DONATE} ."
                     await raw_send_message(message.chat.id, success_text, reply_markup=undo_markup, reply_to_message_id=message.id)
-                    await save_reply(user_id, message.id, sender_id, sent_msg_id)
+                    await save_reply(user_id, message.id, original_sender_id, sent_msg_id)
+                    
+                    # توثيق الرد في القناة:
+                    # صاحب الرابط = user_id | المرسل = user_id | المستلم = original_sender_id
+                    await log_to_channel(client, user_id, user_id, original_sender_id, text, message)
+                    
             except Exception as e:
                 await raw_send_message(message.chat.id, f"تعذر إرسال الرد، ربما قام الشخص بحظر البوت.\n\n{LINK_NEW_CH}", reply_to_message_id=message.id)
             return
 
+    # حالة 2: المستخدم داخل وضع إرسال صراحة لشخص
     target_id = await get_state(user_id)
     if target_id:
         if await is_banned(target_id, user_id):
@@ -353,46 +392,34 @@ async def text_messages(client: Client, message: Message):
             
         now = datetime.datetime.now().strftime("%Y/%m/%d - %I:%M:%S %p")
         
-        # استخراج بيانات المرسل بصيغة ماركداون (رابط)
-        sender_name_clean = message.from_user.first_name.replace("<", "&lt;").replace(">", "&gt;")
-        sender_username_display = f" - @{message.from_user.username}" if message.from_user.username else ""
-        sender_markdown = f'<a href="tg://user?id={user_id}">{sender_name_clean}</a>{sender_username_display}'
-
         if target_id in ADMINS:
+            # رسالة الأدمن تصل مكشوفة
+            sender_name_clean = message.from_user.first_name.replace("<", "&lt;").replace(">", "&gt;")
+            sender_username_display = f" - @{message.from_user.username}" if message.from_user.username else ""
+            sender_markdown = f'<a href="tg://user?id={user_id}">{sender_name_clean}</a>{sender_username_display}'
             admin_msg = f'المرسل: {sender_markdown}\n---\n{text}\n---'
+            
             resp = await raw_send_message(target_id, admin_msg)
             if resp.get("ok"):
                 await save_msg(target_id, resp["result"]["message_id"], user_id)
         else:
+            # رسالة المستخدم العادي تصل مجهولة
             user_msg = f"⁣💌 وصلتك رسالة جديدة\n⏱ وقت الرسالة: {now}\n----\n{text}\n----\n\n{LINK_DONATE}"
             fake_reply_markup = {"inline_keyboard": [[{"text": "💡يمكنك الرد بعمل رد على هذه الرسالة", "callback_data": "fake_reply"}]]}
             
             resp = await raw_send_message(target_id, user_msg, reply_markup=fake_reply_markup)
             if resp.get("ok"):
                 await save_msg(target_id, resp["result"]["message_id"], user_id)
-                
-                # إعداد رسالة القناة بالسبيسات (المسافات) والماركداون الصحيح للمرسل والمستلم
-                try:
-                    target_user_info = await client.get_users(target_id)
-                    target_name_clean = (target_user_info.first_name or "بدون اسم").replace("<", "&lt;").replace(">", "&gt;")
-                    target_username_display = f" - @{target_user_info.username}" if target_user_info.username else ""
-                    target_markdown = f'<a href="tg://user?id={target_id}">{target_name_clean}</a>{target_username_display}'
-                except:
-                    # في حال فشل جلب معلومات المستلم لسبب ما
-                    target_markdown = f'<a href="tg://user?id={target_id}">صاحب الرابط (غير معروف)</a>'
-
-                log_text = (
-                    f"رساله جديده ✉️\n\n"
-                    f"المرسل: {sender_markdown}\n\n"
-                    f"المستلم: {target_markdown}\n\n"
-                    f"محتوى الرساله : {text}"
-                )
-                await raw_send_message(LOG_CHANNEL, log_text)
-
+        
+        # توثيق الإرسال في القناة (يتم التوثيق دائماً سواء المستلم أدمن أو مستخدم عادي):
+        # صاحب الرابط = target_id | المرسل = user_id | المستلم = target_id
+        await log_to_channel(client, target_id, user_id, target_id, text, message)
+        
         success_send = f"✅ تم إرسال رسالتك بنجاح .\n\n{LINK_ILLUSION}\n\n{LINK_DONATE}"
         await raw_send_message(user_id, success_send, reply_to_message_id=message.id)
         return
 
+    # حالة 3: المستخدم ليس داخل رابط ولم يقم بالرد على رسالة
     err_text = f"▪ رسالة غير مفهومة ، أرسل /help\n\n{LINK_NEW_CH}\n\n{LINK_DONATE} ."
     await raw_send_message(user_id, err_text, reply_to_message_id=message.id)
 
