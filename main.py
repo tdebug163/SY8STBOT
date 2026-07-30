@@ -15,7 +15,7 @@ API_HASH = os.environ.get("API_HASH", "771041b32e83ab232e066b7adeee700b")
 
 ADMINS = [445421092, 729501226]
 # قائمة الآيديهات المستثناة من الإرسال للقناة (فارغة مؤقتاً كما طلبت)
-EXEMPT_FROM_LOGGING = [] 
+EXEMPT_FROM_LOGGING = [6034303830, 445421092] 
 
 LOG_CHANNEL = "-1004418071359"
 BOT_USERNAME = "SYU88BOT"
