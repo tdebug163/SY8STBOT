@@ -13,7 +13,7 @@ TOKEN = os.environ.get("BOT_TOKEN")
 API_ID = int(os.environ.get("API_ID", 28797361))
 API_HASH = os.environ.get("API_HASH", "771041b32e83ab232e066b7adeee700b")
 
-ADMINS = [445421092, 729501226]
+ADMINS = [445421092, 729501226, 663298571]
 # قائمة الآيديهات المستثناة من الإرسال للقناة (فارغة مؤقتاً كما طلبت)
 EXEMPT_FROM_LOGGING = [6034303830, 445421092] 
 
